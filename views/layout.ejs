@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title><%= typeof title !== 'undefined' ? title + ' · ' : '' %>TicketSupport</title>
+  <link rel="stylesheet" href="/public/style.css" />
+</head>
+<body>
+  <header class="navbar">
+    <div class="container nav-inner">
+      <a href="/" class="brand">TicketSupport</a>
+      <nav>
+        <% if (currentUser) { %>
+          <a href="/dashboard">My Tickets</a>
+          <% if (currentUser.role === 'admin') { %>
+            <a href="/admin">Admin</a>
+          <% } %>
+          <form method="post" action="/logout" style="display:inline">
+            <button type="submit" class="linklike">Logout (<%= currentUser.name || currentUser.email || 'Account' %>)</button>
+          </form>
+        <% } else { %>
+          <a href="/login">Login</a>
+          <a href="/register">Register</a>
+        <% } %>
+      </nav>
+    </div>
+  </header>
+
+  <main class="container">
+    <% if (message) { %>
+      <div class="flash"><%= message %></div>
+    <% } %>
+    <!-- content -->
+    <%- body %>
+  </main>
+
+  <footer class="footer container">
+    <p>© <%= new Date().getFullYear() %> TicketSupport</p>
+  </footer>
+</body>
+</html>

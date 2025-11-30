@@ -1,0 +1,41 @@
+<section>
+  <div class="flex between center">
+    <h1>Admin · Tickets</h1>
+    <form method="get" action="/admin" class="filters">
+      <label>Status
+        <select name="status" onchange="this.form.submit()">
+          <option value="" <%= !status ? 'selected':'' %>>All</option>
+          <option value="open" <%= status==='open'?'selected':'' %>>open</option>
+          <option value="answered" <%= status==='answered'?'selected':'' %>>answered</option>
+          <option value="closed" <%= status==='closed'?'selected':'' %>>closed</option>
+        </select>
+      </label>
+      <noscript><button type="submit" class="btn">Apply</button></noscript>
+    </form>
+  </div>
+
+  <% if (!tickets || tickets.length === 0) { %>
+    <p>No tickets.</p>
+  <% } else { %>
+    <div class="table">
+      <div class="row head">
+        <div>Subject</div>
+        <div>User</div>
+        <div>Status</div>
+        <div>Updated</div>
+        <div></div>
+      </div>
+      <% tickets.forEach(t => { %>
+        <div class="row">
+          <div><strong><%= t.subject %></strong></div>
+          <div class="muted small"><%= t.user_name || '' %> <%= t.user_email %></div>
+          <div><span class="badge <%= t.status %>"><%= t.status %></span></div>
+          <div class="muted small"><%= t.updated_at || t.created_at %></div>
+          <div class="actions">
+            <a class="btn" href="/tickets/<%= t.id %>">View</a>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+  <% } %>
+</section>

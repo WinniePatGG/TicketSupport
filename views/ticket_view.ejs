@@ -1,0 +1,58 @@
+<section>
+  <div class="flex between center">
+    <h1><span class="muted">Ticket:</span> <%= ticket.subject %></h1>
+    <span class="badge <%= ticket.status %>"><%= ticket.status %></span>
+  </div>
+  <div class="muted small">
+    Created: <%= ticket.created_at %> · Updated: <%= ticket.updated_at %>
+    <% if (currentUser && currentUser.role === 'admin') { %>
+      · From: <%= ticket.user_name || '' %> (<%= ticket.user_email || '' %>)
+    <% } %>
+  </div>
+
+  <article class="card">
+    <p><%= ticket.description %></p>
+  </article>
+
+  <h2>Conversation</h2>
+  <div class="thread">
+    <% if (responses && responses.length) { %>
+      <% responses.forEach(r => { %>
+        <div class="message <%= r.is_admin_response ? 'admin' : 'user' %>">
+          <div class="meta">
+            <span class="who"><%= r.name || r.email %></span>
+            <span class="when"><%= r.created_at %></span>
+            <% if (r.is_admin_response) { %><span class="badge admin">admin</span><% } %>
+          </div>
+          <div class="body"><%= r.message %></div>
+        </div>
+      <% }) %>
+    <% } else { %>
+      <p class="muted">No responses yet.</p>
+    <% } %>
+  </div>
+
+  <h3>Add a response</h3>
+  <form method="post" action="/tickets/<%= ticket.id %>/respond" class="card">
+    <textarea name="message" rows="4" required placeholder="Type your message..."></textarea>
+    <div class="flex end">
+      <button type="submit" class="btn">Send</button>
+    </div>
+  </form>
+
+  <div class="flex between center" style="margin-top:1rem">
+    <a href="<%= currentUser.role === 'admin' ? '/admin' : '/dashboard' %>">&larr; Back</a>
+    <% if (currentUser.role === 'admin') { %>
+      <form method="post" action="/admin/tickets/<%= ticket.id %>/status">
+        <label>Set status
+          <select name="status">
+            <option value="open" <%= ticket.status==='open'?'selected':'' %>>open</option>
+            <option value="answered" <%= ticket.status==='answered'?'selected':'' %>>answered</option>
+            <option value="closed" <%= ticket.status==='closed'?'selected':'' %>>closed</option>
+          </select>
+        </label>
+        <button type="submit" class="btn">Update</button>
+      </form>
+    <% } %>
+  </div>
+</section>

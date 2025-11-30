@@ -1,0 +1,27 @@
+<section class="auth">
+  <h1>Login</h1>
+  <% if (typeof query !== 'undefined' && query.error) { %>
+    <div class="flash error">Invalid email or password.</div>
+  <% } %>
+  <% if (typeof query !== 'undefined' && query.oauth_error) { %>
+    <div class="flash error">Google sign-in failed. Please try again.</div>
+  <% } %>
+  <form method="post" action="/login" class="card">
+    <label>Email
+      <input type="email" name="email" required />
+    </label>
+    <label>Password
+      <input type="password" name="password" required />
+    </label>
+    <button type="submit">Login</button>
+  </form>
+  <% if (googleEnabled) { %>
+    <div class="oauth">
+      <a class="btn google" href="/auth/google">
+        <img src="https://www.gstatic.com/images/branding/product/2x/googleg_48dp.png" alt="" class="g-icon" />
+        <span>Continue with Google</span>
+      </a>
+    </div>
+  <% } %>
+  <p>Don't have an account? <a href="/register">Register</a></p>
+</section>

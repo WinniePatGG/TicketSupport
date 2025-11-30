@@ -1,0 +1,30 @@
+{
+  "name": "ticketsupport",
+  "version": "1.0.0",
+  "description": "Simple ticket support system with local and Google authentication, user dashboard, admin panel, and SQLite database",
+  "main": "index.js",
+  "type": "commonjs",
+  "scripts": {
+    "start": "node index.js",
+    "dev": "nodemon index.js",
+    "test": "echo \"No tests configured.\""
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "dotenv": "^16.4.5",
+    "ejs": "^3.1.10",
+    "express-ejs-layouts": "^2.5.1",
+    "express": "^4.21.1",
+    "express-session": "^1.17.3",
+    "method-override": "^3.0.0",
+    "morgan": "^1.10.0",
+    "passport": "^0.7.0",
+    "passport-google-oauth20": "^2.0.0",
+    "passport-local": "^1.0.0",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "nodemon": "^3.1.7"
+  },
+  "private": true
+}

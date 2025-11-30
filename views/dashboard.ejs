@@ -1,0 +1,22 @@
+<section>
+  <div class="flex between center">
+    <h1>My Tickets</h1>
+    <a class="btn primary" href="/tickets/new">New Ticket</a>
+  </div>
+
+  <% if (!tickets || tickets.length === 0) { %>
+    <p>No tickets yet. Create your first one.</p>
+  <% } else { %>
+    <div class="list">
+      <% tickets.forEach(t => { %>
+        <a class="list-item" href="/tickets/<%= t.id %>">
+          <div>
+            <div class="subject"><%= t.subject %></div>
+            <div class="muted">Updated: <%= t.updated_at || t.created_at %></div>
+          </div>
+          <span class="badge <%= t.status %>"><%= t.status %></span>
+        </a>
+      <% }) %>
+    </div>
+  <% } %>
+</section>
