@@ -477,7 +477,6 @@ initDb(() => {
   });
 });
 
-// Email verification routes
 app.get('/verify/:token', (req, res) => {
   const { token } = req.params;
   if (!token) { req.session.message = 'Invalid verification link.'; return res.redirect('/login'); }
