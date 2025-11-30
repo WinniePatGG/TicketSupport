@@ -46,6 +46,12 @@
               <% } else { %>
                 <span class="badge">No login set</span>
               <% } %>
+              ·
+              <% if (u.email_verified) { %>
+                <span class="badge verified" title="Email verified">Verified</span>
+              <% } else { %>
+                <span class="badge unverified" title="Email not yet verified">Unverified</span>
+              <% } %>
             <% } %>
           </div>
           <div>

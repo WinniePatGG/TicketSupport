@@ -20,6 +20,9 @@ function initDb(callback) {
         password_hash TEXT,
         google_id TEXT UNIQUE,
         role TEXT NOT NULL DEFAULT 'user',
+        email_verified INTEGER NOT NULL DEFAULT 0,
+        verify_token TEXT,
+        verify_token_expires TEXT,
         banned INTEGER NOT NULL DEFAULT 0,
         created_at TEXT
       )`
@@ -28,11 +31,26 @@ function initDb(callback) {
     db.all(`PRAGMA table_info(users)`, (tiErr, cols) => {
       if (!tiErr) {
         const hasBanned = Array.isArray(cols) && cols.some(c => c.name === 'banned');
+        const hasEmailVerified = Array.isArray(cols) && cols.some(c => c.name === 'email_verified');
+        const hasVerifyToken = Array.isArray(cols) && cols.some(c => c.name === 'verify_token');
+        const hasVerifyTokenExpires = Array.isArray(cols) && cols.some(c => c.name === 'verify_token_expires');
         if (!hasBanned) {
           db.run(`ALTER TABLE users ADD COLUMN banned INTEGER NOT NULL DEFAULT 0`);
         }
+        if (!hasEmailVerified) {
+          db.run(`ALTER TABLE users ADD COLUMN email_verified INTEGER NOT NULL DEFAULT 0`);
+        }
+        if (!hasVerifyToken) {
+          db.run(`ALTER TABLE users ADD COLUMN verify_token TEXT`);
+        }
+        if (!hasVerifyTokenExpires) {
+          db.run(`ALTER TABLE users ADD COLUMN verify_token_expires TEXT`);
+        }
       }
     });
+
+    // Helpful index for verification lookups
+    db.run('CREATE INDEX IF NOT EXISTS idx_users_verify_token ON users(verify_token)');
 
     db.run(
       `CREATE TABLE IF NOT EXISTS tickets (

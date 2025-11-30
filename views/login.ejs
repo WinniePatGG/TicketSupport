@@ -3,12 +3,22 @@
   <% if (typeof query !== 'undefined' && query.error) { %>
     <div class="flash error">Invalid email or password.</div>
   <% } %>
+  <% if (typeof query !== 'undefined' && query.unverified) { %>
+    <div class="flash warn">
+      Your email is not verified yet. Please check your inbox.
+      <% if (query.email) { %>
+        You can also <a href="/verify/resend?email=<%= encodeURIComponent(query.email) %>">resend the verification email</a>.
+      <% } else { %>
+        You can also <a href="/verify/resend">resend the verification email</a>.
+      <% } %>
+    </div>
+  <% } %>
   <% if (typeof query !== 'undefined' && query.oauth_error) { %>
     <div class="flash error">Google sign-in failed. Please try again.</div>
   <% } %>
   <form method="post" action="/login" class="card">
     <label>Email
-      <input type="email" name="email" required />
+      <input type="email" name="email" required value="<%= (query && query.email) ? query.email : '' %>" />
     </label>
     <label>Password
       <input type="password" name="password" required />

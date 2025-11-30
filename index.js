@@ -8,8 +8,10 @@ const passport = require('passport');
 const LocalStrategy = require('passport-local').Strategy;
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const bcrypt = require('bcryptjs');
+const crypto = require('crypto');
 const { db, initDb } = require('./server/db');
 const expressLayouts = require('express-ejs-layouts');
+const { sendVerificationEmail } = require('./server/mailer');
 
 const app = express();
 
@@ -50,12 +52,14 @@ passport.use(
   new LocalStrategy(
     { usernameField: 'email', passwordField: 'password' },
     (email, password, done) => {
-      db.get('SELECT * FROM users WHERE email = ?', [email.toLowerCase()], async (err, user) => {
+      const normEmail = email.toLowerCase();
+      db.get('SELECT * FROM users WHERE email = ?', [normEmail], async (err, user) => {
         if (err) return done(err);
         if (!user || !user.password_hash) return done(null, false, { message: 'Invalid credentials' });
         if (user.banned) return done(null, false, { message: 'Account is banned' });
         const ok = await bcrypt.compare(password, user.password_hash);
         if (!ok) return done(null, false, { message: 'Invalid credentials' });
+        if (!user.email_verified) return done(null, false, { reason: 'unverified', email: normEmail });
         return done(null, user);
       });
     }
@@ -81,14 +85,18 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
             if (user) {
               if (user.banned) return done(null, false, { message: 'Account is banned' });
               if (!user.google_id) {
-                db.run('UPDATE users SET google_id = ? WHERE id = ?', [googleId, user.id], (uErr) => done(uErr, { ...user, google_id: googleId }));
+                db.run('UPDATE users SET google_id = ?, email_verified = 1 WHERE id = ?', [googleId, user.id], (uErr) => done(uErr, { ...user, google_id: googleId, email_verified: 1 }));
               } else {
-                return done(null, user);
+                if (!user.email_verified) {
+                  db.run('UPDATE users SET email_verified = 1 WHERE id = ?', [user.id], (uErr) => done(uErr, { ...user, email_verified: 1 }));
+                } else {
+                  return done(null, user);
+                }
               }
             } else {
               db.run(
-                'INSERT INTO users (email, name, google_id, role, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
-                [email, name, googleId, 'user'],
+                'INSERT INTO users (email, name, google_id, role, email_verified, created_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+                [email, name, googleId, 'user', 1],
                 function (insErr) {
                   if (insErr) return done(insErr);
                   db.get('SELECT * FROM users WHERE id = ?', [this.lastID], (selErr, newUser) => done(selErr, newUser));
@@ -151,10 +159,20 @@ app.get('/', (req, res) => {
 });
 
 app.get('/login', (req, res) => res.render('login', { query: req.query }));
-app.post('/login', passport.authenticate('local', {
-  failureRedirect: '/login?error=1',
-}), (req, res) => {
-  res.redirect('/dashboard');
+app.post('/login', (req, res, next) => {
+  passport.authenticate('local', (err, user, info) => {
+    if (err) return next(err);
+    if (!user) {
+      if (info && info.reason === 'unverified' && info.email) {
+        return res.redirect(`/login?unverified=1&email=${encodeURIComponent(info.email)}`);
+      }
+      return res.redirect('/login?error=1');
+    }
+    req.logIn(user, (e) => {
+      if (e) return next(e);
+      return res.redirect('/dashboard');
+    });
+  })(req, res, next);
 });
 
 app.get('/register', (req, res) => res.render('register'));
@@ -166,15 +184,18 @@ app.post('/register', async (req, res) => {
   }
   const hash = await bcrypt.hash(password, 10);
   const normEmail = email.toLowerCase();
+  const token = crypto.randomBytes(32).toString('hex');
+  const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
   db.run(
-    'INSERT INTO users (name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
-    [name || '', normEmail, hash, 'user'],
-    function (err) {
+    'INSERT INTO users (name, email, password_hash, role, email_verified, verify_token, verify_token_expires, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+    [name || '', normEmail, hash, 'user', 0, token, expires],
+    async function (err) {
       if (err) {
         req.session.message = 'Registration failed. Email may be already in use.';
         return res.redirect('/register');
       }
-      req.session.message = 'Registration successful. Please log in.';
+      try { await sendVerificationEmail(normEmail, token, name || ''); } catch (e) { console.error('Failed to send verification email:', e.message); }
+      req.session.message = 'Registration successful. Please check your email to verify your account.';
       res.redirect('/login');
     }
   );
@@ -292,7 +313,7 @@ app.post('/admin/tickets/:id/delete', ensureAdmin, (req, res) => {
 app.get('/admin/users', ensureAdmin, (req, res) => {
   db.all(
     `SELECT 
-        id, name, email, role, created_at, banned,
+        id, name, email, role, created_at, banned, email_verified,
         CASE WHEN google_id IS NOT NULL AND TRIM(google_id) <> '' THEN 1 ELSE 0 END AS has_google,
         CASE WHEN password_hash IS NOT NULL AND TRIM(password_hash) <> '' THEN 1 ELSE 0 END AS has_password
       FROM users
@@ -445,11 +466,53 @@ initDb(() => {
     if (!user) {
       const hash = await bcrypt.hash(adminPass, 10);
       db.run(
-        'INSERT INTO users (name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
-        ['Administrator', adminEmail, hash, 'admin']
+        'INSERT INTO users (name, email, password_hash, role, email_verified, created_at) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)',
+        ['Administrator', adminEmail, hash, 'admin', 1]
       );
       console.log(`Seeded admin user: ${adminEmail}`);
+    } else if (!user.email_verified) {
+      db.run('UPDATE users SET email_verified = 1 WHERE id = ?', [user.id]);
     }
     app.listen(PORT, () => console.log(`TicketSupport server running on http://localhost:${PORT}`));
+  });
+});
+
+// Email verification routes
+app.get('/verify/:token', (req, res) => {
+  const { token } = req.params;
+  if (!token) { req.session.message = 'Invalid verification link.'; return res.redirect('/login'); }
+  db.get('SELECT * FROM users WHERE verify_token = ?', [token], (err, user) => {
+    if (err || !user) { req.session.message = 'Invalid or expired verification link.'; return res.redirect('/login'); }
+    if (user.email_verified) { req.session.message = 'Your email is already verified. Please log in.'; return res.redirect('/login'); }
+    const now = new Date();
+    const exp = user.verify_token_expires ? new Date(user.verify_token_expires) : null;
+    if (!exp || exp < now) { req.session.message = 'Verification link has expired. Please request a new one.'; return res.redirect(`/verify/resend?email=${encodeURIComponent(user.email || '')}`); }
+    db.run('UPDATE users SET email_verified = 1, verify_token = NULL, verify_token_expires = NULL WHERE id = ?', [user.id], (uErr) => {
+      req.session.message = uErr ? 'Failed to verify email. Try again.' : 'Your email has been verified. You can now log in.';
+      return res.redirect('/login');
+    });
+  });
+});
+
+app.get('/verify/resend', (req, res) => {
+  const email = (req.query && req.query.email) ? String(req.query.email) : '';
+  res.render('verify_resend', { email });
+});
+
+app.post('/verify/resend', (req, res) => {
+  let { email } = req.body;
+  email = (email || '').trim().toLowerCase();
+  if (!email) { req.session.message = 'Please enter your email.'; return res.redirect('/verify/resend'); }
+  db.get('SELECT * FROM users WHERE email = ?', [email], (err, user) => {
+    if (err) { req.session.message = 'Something went wrong.'; return res.redirect(`/verify/resend?email=${encodeURIComponent(email)}`); }
+    if (!user) { req.session.message = 'If an account exists, a verification email has been sent.'; return res.redirect('/login'); }
+    if (user.email_verified) { req.session.message = 'Your email is already verified. Please log in.'; return res.redirect('/login'); }
+    const token = crypto.randomBytes(32).toString('hex');
+    const expires = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    db.run('UPDATE users SET verify_token = ?, verify_token_expires = ? WHERE id = ?', [token, expires, user.id], async (uErr) => {
+      if (uErr) { req.session.message = 'Could not generate verification link. Try again later.'; return res.redirect(`/verify/resend?email=${encodeURIComponent(email)}`); }
+      try { await sendVerificationEmail(email, token, user.name || ''); } catch (e) { console.error('Failed to send verification email:', e.message); }
+      req.session.message = 'Verification email sent. Please check your inbox.'; return res.redirect('/login');
+    });
   });
 });
