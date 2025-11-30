@@ -13,27 +13,23 @@ const expressLayouts = require('express-ejs-layouts');
 
 const app = express();
 
-// Basic config
 const PORT = process.env.PORT || 3000;
 const SESSION_SECRET = process.env.SESSION_SECRET || 'dev_secret_change_me';
 const GOOGLE_CLIENT_ID = process.env.GOOGLE_CLIENT_ID || '';
 const GOOGLE_CLIENT_SECRET = process.env.GOOGLE_CLIENT_SECRET || '';
 const GOOGLE_CALLBACK_URL = process.env.GOOGLE_CALLBACK_URL || `http://localhost:${PORT}/auth/google/callback`;
 
-// Views and static
 app.set('view engine', 'ejs');
 app.set('views', path.join(__dirname, 'views'));
 app.use('/public', express.static(path.join(__dirname, 'public')));
 app.use(expressLayouts);
 app.set('layout', 'layout');
 
-// Middleware
 app.use(express.urlencoded({ extended: true }));
 app.use(express.json());
 app.use(methodOverride('_method'));
 app.use(morgan('dev'));
 
-// Session
 app.use(
   session({
     secret: SESSION_SECRET,
@@ -42,17 +38,14 @@ app.use(
   })
 );
 
-// Passport setup
 app.use(passport.initialize());
 app.use(passport.session());
 
-// Serialize/deserialize
 passport.serializeUser((user, done) => {
   done(null, { id: user.id, email: user.email, role: user.role, name: user.name });
 });
 passport.deserializeUser((obj, done) => done(null, obj));
 
-// Local strategy
 passport.use(
   new LocalStrategy(
     { usernameField: 'email', passwordField: 'password' },
@@ -69,7 +62,6 @@ passport.use(
   )
 );
 
-// Google strategy (optional)
 if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
   passport.use(
     new GoogleStrategy(
@@ -84,19 +76,16 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
           const rawEmail = (profile.emails && profile.emails[0] && profile.emails[0].value) || null;
           const email = rawEmail ? rawEmail.toLowerCase() : null;
           const name = profile.displayName || (profile.name ? `${profile.name.givenName || ''} ${profile.name.familyName || ''}`.trim() : (email || 'Google User'));
-          // Try to find by google_id, or by email when provided, to link existing local accounts
           db.get('SELECT * FROM users WHERE google_id = ? OR (email IS NOT NULL AND email = ?)', [googleId, email], (err, user) => {
             if (err) return done(err);
             if (user) {
               if (user.banned) return done(null, false, { message: 'Account is banned' });
               if (!user.google_id) {
-                // Link existing local account to Google
                 db.run('UPDATE users SET google_id = ? WHERE id = ?', [googleId, user.id], (uErr) => done(uErr, { ...user, google_id: googleId }));
               } else {
                 return done(null, user);
               }
             } else {
-              // Create new user (email may be null if Google didn't share it)
               db.run(
                 'INSERT INTO users (email, name, google_id, role, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
                 [email, name, googleId, 'user'],
@@ -115,10 +104,8 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
   );
 }
 
-// Helpers
 function ensureAuth(req, res, next) {
   if (req.isAuthenticated()) {
-    // If account was banned after login, force logout
     db.get('SELECT banned FROM users WHERE id = ?', [req.user.id], (e, row) => {
       if (e || !row) return res.redirect('/logout');
       if (row.banned) {
@@ -136,7 +123,6 @@ function ensureAuth(req, res, next) {
 }
 function ensureAdmin(req, res, next) {
   if (!req.isAuthenticated()) return res.status(403).send('Forbidden');
-  // Re-check banned and role in DB (prevents banned admins accessing)
   db.get('SELECT role, banned FROM users WHERE id = ?', [req.user.id], (e, row) => {
     if (e || !row) return res.status(403).send('Forbidden');
     if (row.banned) {
@@ -151,7 +137,6 @@ function ensureAdmin(req, res, next) {
   });
 }
 
-// Flash-like helper using session
 app.use((req, res, next) => {
   res.locals.currentUser = req.user || null;
   res.locals.googleEnabled = Boolean(GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET);
@@ -160,13 +145,11 @@ app.use((req, res, next) => {
   next();
 });
 
-// Routes
 app.get('/', (req, res) => {
   if (req.isAuthenticated()) return res.redirect('/dashboard');
   res.redirect('/login');
 });
 
-// Auth routes
 app.get('/login', (req, res) => res.render('login', { query: req.query }));
 app.post('/login', passport.authenticate('local', {
   failureRedirect: '/login?error=1',
@@ -204,7 +187,6 @@ app.post('/logout', (req, res, next) => {
   });
 });
 
-// Google OAuth routes (only if configured)
 if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
   app.get('/auth/google', passport.authenticate('google', { scope: ['profile', 'email'] }));
   app.get('/auth/google/callback', passport.authenticate('google', { failureRedirect: '/login?oauth_error=1' }), (req, res) => {
@@ -212,7 +194,6 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
   });
 }
 
-// User dashboard
 app.get('/dashboard', ensureAuth, (req, res) => {
   db.all(
     'SELECT * FROM tickets WHERE user_id = ? ORDER BY updated_at DESC, created_at DESC',
@@ -224,7 +205,6 @@ app.get('/dashboard', ensureAuth, (req, res) => {
   );
 });
 
-// New ticket
 app.get('/tickets/new', ensureAuth, (req, res) => res.render('ticket_new'));
 app.post('/tickets', ensureAuth, (req, res) => {
   const { subject, description } = req.body;
@@ -245,7 +225,6 @@ app.post('/tickets', ensureAuth, (req, res) => {
   );
 });
 
-// View ticket
 app.get('/tickets/:id', ensureAuth, (req, res) => {
   const id = req.params.id;
   db.get('SELECT t.*, u.name as user_name, u.email as user_email FROM tickets t JOIN users u ON u.id = t.user_id WHERE t.id = ?', [id], (err, ticket) => {
@@ -258,7 +237,6 @@ app.get('/tickets/:id', ensureAuth, (req, res) => {
   });
 });
 
-// Add response to a ticket
 app.post('/tickets/:id/respond', ensureAuth, (req, res) => {
   const id = req.params.id;
   const { message } = req.body;
@@ -279,7 +257,6 @@ app.post('/tickets/:id/respond', ensureAuth, (req, res) => {
   });
 });
 
-// Admin panel
 app.get('/admin', ensureAdmin, (req, res) => {
   const status = req.query.status;
   const params = [];
@@ -295,7 +272,6 @@ app.get('/admin', ensureAdmin, (req, res) => {
   });
 });
 
-// Admin change status
 app.post('/admin/tickets/:id/status', ensureAdmin, (req, res) => {
   const { status } = req.body;
   const id = req.params.id;
@@ -305,7 +281,6 @@ app.post('/admin/tickets/:id/status', ensureAdmin, (req, res) => {
   });
 });
 
-// Admin delete ticket
 app.post('/admin/tickets/:id/delete', ensureAdmin, (req, res) => {
   const id = req.params.id;
   db.run('DELETE FROM tickets WHERE id = ?', [id], (err) => {
@@ -314,7 +289,6 @@ app.post('/admin/tickets/:id/delete', ensureAdmin, (req, res) => {
   });
 });
 
-// Admin: manage users (grant admin)
 app.get('/admin/users', ensureAdmin, (req, res) => {
   db.all(
     `SELECT 
@@ -339,7 +313,6 @@ app.post('/admin/users/:id/make-admin', ensureAdmin, (req, res) => {
   });
 });
 
-// Admin: remove admin role
 app.post('/admin/users/:id/unadmin', ensureAdmin, (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (Number.isNaN(id)) {
@@ -350,7 +323,6 @@ app.post('/admin/users/:id/unadmin', ensureAdmin, (req, res) => {
     req.session.message = 'You cannot remove your own admin role.';
     return res.redirect('/admin/users');
   }
-  // Ensure we never remove the last remaining admin
   db.get('SELECT COUNT(*) AS cnt FROM users WHERE role = ?', ['admin'], (err, row) => {
     if (err) {
       req.session.message = 'Database error.';
@@ -409,7 +381,6 @@ app.post('/admin/users/:id/unadmin', ensureAdmin, (req, res) => {
   });
 });
 
-// Admin: ban user
 app.post('/admin/users/:id/ban', ensureAdmin, (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (Number.isNaN(id)) { req.session.message = 'Invalid user id.'; return res.redirect('/admin/users'); }
@@ -434,7 +405,6 @@ app.post('/admin/users/:id/ban', ensureAdmin, (req, res) => {
   });
 });
 
-// Admin: unban user
 app.post('/admin/users/:id/unban', ensureAdmin, (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (Number.isNaN(id)) { req.session.message = 'Invalid user id.'; return res.redirect('/admin/users'); }
@@ -444,7 +414,6 @@ app.post('/admin/users/:id/unban', ensureAdmin, (req, res) => {
   });
 });
 
-// Admin: delete user
 app.post('/admin/users/:id/delete', ensureAdmin, (req, res) => {
   const id = parseInt(req.params.id, 10);
   if (Number.isNaN(id)) { req.session.message = 'Invalid user id.'; return res.redirect('/admin/users'); }
@@ -469,9 +438,7 @@ app.post('/admin/users/:id/delete', ensureAdmin, (req, res) => {
   });
 });
 
-// Initialize DB and seed admin then start server
 initDb(() => {
-  // Seed default admin if not exists
   const adminEmail = process.env.ADMIN_EMAIL || 'admin@example.com';
   const adminPass = process.env.ADMIN_PASSWORD || 'admin123';
   db.get('SELECT * FROM users WHERE email = ?', [adminEmail], async (err, user) => {

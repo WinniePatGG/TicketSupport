@@ -25,7 +25,6 @@ function initDb(callback) {
       )`
     );
 
-    // Idempotent migration: ensure 'banned' column exists for older databases
     db.all(`PRAGMA table_info(users)`, (tiErr, cols) => {
       if (!tiErr) {
         const hasBanned = Array.isArray(cols) && cols.some(c => c.name === 'banned');
