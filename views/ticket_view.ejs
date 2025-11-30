@@ -53,6 +53,9 @@
         </label>
         <button type="submit" class="btn">Update</button>
       </form>
+      <form method="post" action="/admin/tickets/<%= ticket.id %>/delete" onsubmit="return confirm('Delete this ticket? This cannot be undone.')">
+        <button type="submit" class="btn danger">Delete Ticket</button>
+      </form>
     <% } %>
   </div>
 </section>

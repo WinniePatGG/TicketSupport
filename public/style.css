@@ -16,6 +16,9 @@ nav a{color:var(--text);text-decoration:none;margin-left:1rem}
 label{display:block;margin:.5rem 0;color:var(--muted)}
 input,textarea,select{width:100%;padding:.6rem .7rem;border-radius:8px;border:1px solid #334155;background:#0b1220;color:var(--text)}
 button,.btn{background:#1f2937;color:var(--text);border:1px solid #334155;border-radius:8px;padding:.5rem .9rem;cursor:pointer;text-decoration:none;display:inline-block}
+.btn.danger{background:#7f1d1d;border-color:#dc2626;color:#fee2e2}
+.btn.danger:hover{filter:brightness(1.05)}
+.btn.danger:active{transform:translateY(0)}
 .btn.primary{background:var(--brand);border-color:#3b82f6;color:#03122b}
 .btn.google{background:#fff;color:#111;border-color:#dadce0;display:flex;align-items:center;justify-content:center;gap:.6rem;padding:.6rem 1rem;border-radius:999px;font-weight:600;box-shadow:0 1px 1px rgba(0,0,0,.08);transition:transform .05s ease,box-shadow .2s ease,background-color .2s ease,border-color .2s ease}
 .btn.google .g-icon{width:18px;height:18px;display:block}

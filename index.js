@@ -277,6 +277,62 @@ app.post('/admin/tickets/:id/status', ensureAdmin, (req, res) => {
   });
 });
 
+// Admin delete ticket
+app.post('/admin/tickets/:id/delete', ensureAdmin, (req, res) => {
+  const id = req.params.id;
+  db.run('DELETE FROM tickets WHERE id = ?', [id], (err) => {
+    req.session.message = err ? 'Failed to delete ticket.' : 'Ticket deleted.';
+    res.redirect('/admin');
+  });
+});
+
+// Admin: manage users (grant admin)
+app.get('/admin/users', ensureAdmin, (req, res) => {
+  db.all('SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC, id DESC', [], (err, users) => {
+    if (err) users = [];
+    res.render('admin_users', { users });
+  });
+});
+
+app.post('/admin/users/:id/make-admin', ensureAdmin, (req, res) => {
+  const id = req.params.id;
+  db.run('UPDATE users SET role = ? WHERE id = ?', ['admin', id], (err) => {
+    req.session.message = err ? 'Failed to grant admin rights.' : 'Admin rights granted.';
+    res.redirect('/admin/users');
+  });
+});
+
+app.post('/admin/users/grant-admin', ensureAdmin, (req, res) => {
+  let { email, name } = req.body;
+  email = (email || '').trim().toLowerCase();
+  name = (name || '').trim();
+  if (!email) {
+    req.session.message = 'Email is required.';
+    return res.redirect('/admin/users');
+  }
+  db.get('SELECT * FROM users WHERE email = ?', [email], (err, user) => {
+    if (err) {
+      req.session.message = 'Database error.';
+      return res.redirect('/admin/users');
+    }
+    if (user) {
+      db.run('UPDATE users SET role = ? WHERE id = ?', ['admin', user.id], (uErr) => {
+        req.session.message = uErr ? 'Failed to grant admin rights.' : `Admin rights granted to ${email}.`;
+        return res.redirect('/admin/users');
+      });
+    } else {
+      db.run(
+        'INSERT INTO users (name, email, role, created_at) VALUES (?, ?, ?, CURRENT_TIMESTAMP)',
+        [name, email, 'admin'],
+        (iErr) => {
+          req.session.message = iErr ? 'Failed to create admin user.' : `Admin user created for ${email}.`;
+          return res.redirect('/admin/users');
+        }
+      );
+    }
+  });
+});
+
 // Initialize DB and seed admin then start server
 initDb(() => {
   // Seed default admin if not exists
@@ -289,7 +345,7 @@ initDb(() => {
         'INSERT INTO users (name, email, password_hash, role, created_at) VALUES (?, ?, ?, ?, CURRENT_TIMESTAMP)',
         ['Administrator', adminEmail, hash, 'admin']
       );
-      console.log(`Seeded admin user: ${adminEmail} / ${adminPass}`);
+      console.log(`Seeded admin user: ${adminEmail}`);
     }
     app.listen(PORT, () => console.log(`TicketSupport server running on http://localhost:${PORT}`));
   });

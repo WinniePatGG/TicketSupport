@@ -1,17 +1,20 @@
 <section>
   <div class="flex between center">
     <h1>Admin · Tickets</h1>
-    <form method="get" action="/admin" class="filters">
-      <label>Status
-        <select name="status" onchange="this.form.submit()">
-          <option value="" <%= !status ? 'selected':'' %>>All</option>
-          <option value="open" <%= status==='open'?'selected':'' %>>open</option>
-          <option value="answered" <%= status==='answered'?'selected':'' %>>answered</option>
-          <option value="closed" <%= status==='closed'?'selected':'' %>>closed</option>
-        </select>
-      </label>
-      <noscript><button type="submit" class="btn">Apply</button></noscript>
-    </form>
+    <div class="flex center">
+      <a class="btn" href="/admin/users">Manage Users</a>
+      <form method="get" action="/admin" class="filters">
+        <label>Status
+          <select name="status" onchange="this.form.submit()">
+            <option value="" <%= !status ? 'selected':'' %>>All</option>
+            <option value="open" <%= status==='open'?'selected':'' %>>open</option>
+            <option value="answered" <%= status==='answered'?'selected':'' %>>answered</option>
+            <option value="closed" <%= status==='closed'?'selected':'' %>>closed</option>
+          </select>
+        </label>
+        <noscript><button type="submit" class="btn">Apply</button></noscript>
+      </form>
+    </div>
   </div>
 
   <% if (!tickets || tickets.length === 0) { %>
@@ -33,6 +36,9 @@
           <div class="muted small"><%= t.updated_at || t.created_at %></div>
           <div class="actions">
             <a class="btn" href="/tickets/<%= t.id %>">View</a>
+            <form method="post" action="/admin/tickets/<%= t.id %>/delete" style="display:inline" onsubmit="return confirm('Delete this ticket? This cannot be undone.')">
+              <button type="submit" class="btn danger">Delete</button>
+            </form>
           </div>
         </div>
       <% }) %>
