@@ -1,0 +1,22 @@
+services:
+  hykaikanet-website:
+    image: node:20.19.6-bullseye
+    container_name: SupportPanel
+    restart: unless-stopped
+    working_dir: /app
+    volumes:
+      - ./app:/app
+    command:
+      sh -c "
+      npm install &&
+      npm run dev
+      "
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: 3
+
+networks:
+  default:
+    name: supportpanel
