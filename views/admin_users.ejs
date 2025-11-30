@@ -1,0 +1,56 @@
+<section>
+  <div class="flex between center">
+    <h1>Admin · Users</h1>
+    <a class="btn" href="/admin">Tickets</a>
+  </div>
+
+  <div class="card">
+    <h3>Grant admin by email</h3>
+    <form method="post" action="/admin/users/grant-admin" class="flex">
+      <label style="flex:1">Name (optional)
+        <input type="text" name="name" placeholder="Name" />
+      </label>
+      <label style="flex:1">Email
+        <input type="email" name="email" required placeholder="user@example.com" />
+      </label>
+      <div style="align-self:flex-end">
+        <button type="submit" class="btn primary">Grant admin</button>
+      </div>
+    </form>
+  </div>
+
+  <% if (!users || users.length === 0) { %>
+    <p>No users found.</p>
+  <% } else { %>
+    <div class="table">
+      <div class="row head">
+        <div>Name</div>
+        <div>Email</div>
+        <div>Role</div>
+        <div>Created</div>
+        <div></div>
+      </div>
+      <% users.forEach(u => { %>
+        <div class="row">
+          <div><%= (u.name && u.name.trim()) ? u.name : '—' %></div>
+          <div class="small muted"><%= u.email || '—' %></div>
+          <div>
+            <% if (u.role === 'admin') { %>
+              <span class="badge admin">admin</span>
+            <% } else { %>
+              <span class="badge"><%= u.role %></span>
+            <% } %>
+          </div>
+          <div class="small muted"><%= u.created_at || '' %></div>
+          <div class="actions">
+            <% if (u.role !== 'admin') { %>
+              <form method="post" action="/admin/users/<%= u.id %>/make-admin" onsubmit="return confirm('Grant admin rights to <%= u.email %>?')">
+                <button type="submit" class="btn">Make admin</button>
+              </form>
+            <% } %>
+          </div>
+        </div>
+      <% }) %>
+    </div>
+  <% } %>
+</section>
