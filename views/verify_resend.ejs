@@ -1,0 +1,15 @@
+<section class="auth">
+  <h1>Resend verification email</h1>
+  <div class="card">
+    <form method="post" action="/verify/resend">
+      <label>Email
+        <input type="email" name="email" required value="<%= email || '' %>" placeholder="you@example.com" />
+      </label>
+      <div class="flex end">
+        <button type="submit" class="btn">Send verification email</button>
+      </div>
+    </form>
+  </div>
+  <p class="small muted">If your email exists and is not verified yet, we will send a new verification link. Links expire after 24 hours.</p>
+  <p class="small"><a href="/login">Back to login</a></p>
+</section>
