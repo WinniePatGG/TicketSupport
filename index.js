@@ -60,6 +60,7 @@ passport.use(
       db.get('SELECT * FROM users WHERE email = ?', [email.toLowerCase()], async (err, user) => {
         if (err) return done(err);
         if (!user || !user.password_hash) return done(null, false, { message: 'Invalid credentials' });
+        if (user.banned) return done(null, false, { message: 'Account is banned' });
         const ok = await bcrypt.compare(password, user.password_hash);
         if (!ok) return done(null, false, { message: 'Invalid credentials' });
         return done(null, user);
@@ -87,6 +88,7 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
           db.get('SELECT * FROM users WHERE google_id = ? OR (email IS NOT NULL AND email = ?)', [googleId, email], (err, user) => {
             if (err) return done(err);
             if (user) {
+              if (user.banned) return done(null, false, { message: 'Account is banned' });
               if (!user.google_id) {
                 // Link existing local account to Google
                 db.run('UPDATE users SET google_id = ? WHERE id = ?', [googleId, user.id], (uErr) => done(uErr, { ...user, google_id: googleId }));
@@ -115,12 +117,38 @@ if (GOOGLE_CLIENT_ID && GOOGLE_CLIENT_SECRET) {
 
 // Helpers
 function ensureAuth(req, res, next) {
-  if (req.isAuthenticated()) return next();
+  if (req.isAuthenticated()) {
+    // If account was banned after login, force logout
+    db.get('SELECT banned FROM users WHERE id = ?', [req.user.id], (e, row) => {
+      if (e || !row) return res.redirect('/logout');
+      if (row.banned) {
+        req.logout(() => {
+          req.session.message = 'Your account has been banned.';
+          return res.redirect('/login');
+        });
+      } else {
+        return next();
+      }
+    });
+    return;
+  }
   res.redirect('/login');
 }
 function ensureAdmin(req, res, next) {
-  if (req.isAuthenticated() && req.user.role === 'admin') return next();
-  res.status(403).send('Forbidden');
+  if (!req.isAuthenticated()) return res.status(403).send('Forbidden');
+  // Re-check banned and role in DB (prevents banned admins accessing)
+  db.get('SELECT role, banned FROM users WHERE id = ?', [req.user.id], (e, row) => {
+    if (e || !row) return res.status(403).send('Forbidden');
+    if (row.banned) {
+      req.logout(() => {
+        req.session.message = 'Your account has been banned.';
+        return res.redirect('/login');
+      });
+      return;
+    }
+    if (row.role === 'admin') return next();
+    return res.status(403).send('Forbidden');
+  });
 }
 
 // Flash-like helper using session
@@ -290,7 +318,7 @@ app.post('/admin/tickets/:id/delete', ensureAdmin, (req, res) => {
 app.get('/admin/users', ensureAdmin, (req, res) => {
   db.all(
     `SELECT 
-        id, name, email, role, created_at,
+        id, name, email, role, created_at, banned,
         CASE WHEN google_id IS NOT NULL AND TRIM(google_id) <> '' THEN 1 ELSE 0 END AS has_google,
         CASE WHEN password_hash IS NOT NULL AND TRIM(password_hash) <> '' THEN 1 ELSE 0 END AS has_password
       FROM users
@@ -347,10 +375,10 @@ app.post('/admin/users/:id/unadmin', ensureAdmin, (req, res) => {
         return res.redirect('/admin/users');
       });
     });
-  });
-});
+    });
+    });
 
-app.post('/admin/users/grant-admin', ensureAdmin, (req, res) => {
+    app.post('/admin/users/grant-admin', ensureAdmin, (req, res) => {
   let { email, name } = req.body;
   email = (email || '').trim().toLowerCase();
   name = (name || '').trim();
@@ -377,6 +405,66 @@ app.post('/admin/users/grant-admin', ensureAdmin, (req, res) => {
           return res.redirect('/admin/users');
         }
       );
+    }
+  });
+});
+
+// Admin: ban user
+app.post('/admin/users/:id/ban', ensureAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) { req.session.message = 'Invalid user id.'; return res.redirect('/admin/users'); }
+  if (req.user && req.user.id === id) { req.session.message = 'You cannot ban yourself.'; return res.redirect('/admin/users'); }
+  db.get('SELECT id, email, role FROM users WHERE id = ?', [id], (e, user) => {
+    if (e || !user) { req.session.message = 'User not found.'; return res.redirect('/admin/users'); }
+    if (user.role === 'admin') {
+      db.get('SELECT COUNT(*) AS cnt FROM users WHERE role = ?', ['admin'], (err, row) => {
+        const adminCount = row ? row.cnt : 0;
+        if (adminCount <= 1) { req.session.message = 'Cannot ban the last admin.'; return res.redirect('/admin/users'); }
+        db.run('UPDATE users SET banned = 1 WHERE id = ?', [id], (uErr) => {
+          req.session.message = uErr ? 'Failed to ban user.' : `User ${user.email || ''} banned.`;
+          return res.redirect('/admin/users');
+        });
+      });
+    } else {
+      db.run('UPDATE users SET banned = 1 WHERE id = ?', [id], (uErr) => {
+        req.session.message = uErr ? 'Failed to ban user.' : `User ${user.email || ''} banned.`;
+        return res.redirect('/admin/users');
+      });
+    }
+  });
+});
+
+// Admin: unban user
+app.post('/admin/users/:id/unban', ensureAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) { req.session.message = 'Invalid user id.'; return res.redirect('/admin/users'); }
+  db.run('UPDATE users SET banned = 0 WHERE id = ?', [id], (uErr) => {
+    req.session.message = uErr ? 'Failed to unban user.' : 'User unbanned.';
+    return res.redirect('/admin/users');
+  });
+});
+
+// Admin: delete user
+app.post('/admin/users/:id/delete', ensureAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) { req.session.message = 'Invalid user id.'; return res.redirect('/admin/users'); }
+  if (req.user && req.user.id === id) { req.session.message = 'You cannot delete yourself.'; return res.redirect('/admin/users'); }
+  db.get('SELECT id, email, role FROM users WHERE id = ?', [id], (e, user) => {
+    if (e || !user) { req.session.message = 'User not found.'; return res.redirect('/admin/users'); }
+    if (user.role === 'admin') {
+      db.get('SELECT COUNT(*) AS cnt FROM users WHERE role = ?', ['admin'], (err, row) => {
+        const adminCount = row ? row.cnt : 0;
+        if (adminCount <= 1) { req.session.message = 'Cannot delete the last admin.'; return res.redirect('/admin/users'); }
+        db.run('DELETE FROM users WHERE id = ?', [id], (dErr) => {
+          req.session.message = dErr ? 'Failed to delete user.' : `User ${user.email || ''} deleted.`;
+          return res.redirect('/admin/users');
+        });
+      });
+    } else {
+      db.run('DELETE FROM users WHERE id = ?', [id], (dErr) => {
+        req.session.message = dErr ? 'Failed to delete user.' : `User ${user.email || ''} deleted.`;
+        return res.redirect('/admin/users');
+      });
     }
   });
 });

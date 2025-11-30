@@ -117,6 +117,7 @@ button:focus-visible,.btn:focus-visible{outline:2px solid transparent;box-shadow
 .badge.answered{background:rgba(16,185,129,.12);color:#86efac;border:1px solid rgba(16,185,129,.45)}
 .badge.closed{background:rgba(239,68,68,.12);color:#fca5a5;border:1px solid rgba(239,68,68,.5)}
 .badge.admin{background:rgba(245,158,11,.12);color:#fde68a;border:1px solid rgba(245,158,11,.5)}
+.badge.banned{background:rgba(239,68,68,.16);color:#fecaca;border:1px solid rgba(239,68,68,.55)}
 
 .auth{max-width:460px;margin:2.2rem auto}
 

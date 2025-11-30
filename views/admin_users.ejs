@@ -54,6 +54,9 @@
             <% } else { %>
               <span class="badge"><%= u.role %></span>
             <% } %>
+            <% if (u.banned) { %>
+              <span class="badge banned" title="This user is banned">banned</span>
+            <% } %>
           </div>
           <div class="small muted"><%= u.created_at || '' %></div>
           <div class="actions">
@@ -69,6 +72,21 @@
               <% } else { %>
                 <span class="small muted">(You)</span>
               <% } %>
+            <% } %>
+
+            <% if (!currentUser || currentUser.id !== u.id) { %>
+              <% if (u.banned) { %>
+                <form method="post" action="/admin/users/<%= u.id %>/unban" onsubmit="return confirm('Unban <%= u.email %>?')">
+                  <button type="submit" class="btn">Unban</button>
+                </form>
+              <% } else { %>
+                <form method="post" action="/admin/users/<%= u.id %>/ban" onsubmit="return confirm('Ban <%= u.email %>? They will be unable to sign in.')">
+                  <button type="submit" class="btn danger">Ban</button>
+                </form>
+              <% } %>
+              <form method="post" action="/admin/users/<%= u.id %>/delete" onsubmit="return confirm('Permanently delete <%= u.email %>? All their tickets and responses will be removed. This cannot be undone.')">
+                <button type="submit" class="btn danger">Delete user</button>
+              </form>
             <% } %>
           </div>
         </div>

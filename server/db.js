@@ -20,9 +20,20 @@ function initDb(callback) {
         password_hash TEXT,
         google_id TEXT UNIQUE,
         role TEXT NOT NULL DEFAULT 'user',
+        banned INTEGER NOT NULL DEFAULT 0,
         created_at TEXT
       )`
     );
+
+    // Idempotent migration: ensure 'banned' column exists for older databases
+    db.all(`PRAGMA table_info(users)`, (tiErr, cols) => {
+      if (!tiErr) {
+        const hasBanned = Array.isArray(cols) && cols.some(c => c.name === 'banned');
+        if (!hasBanned) {
+          db.run(`ALTER TABLE users ADD COLUMN banned INTEGER NOT NULL DEFAULT 0`);
+        }
+      }
+    });
 
     db.run(
       `CREATE TABLE IF NOT EXISTS tickets (
