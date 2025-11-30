@@ -288,10 +288,19 @@ app.post('/admin/tickets/:id/delete', ensureAdmin, (req, res) => {
 
 // Admin: manage users (grant admin)
 app.get('/admin/users', ensureAdmin, (req, res) => {
-  db.all('SELECT id, name, email, role, created_at FROM users ORDER BY created_at DESC, id DESC', [], (err, users) => {
-    if (err) users = [];
-    res.render('admin_users', { users });
-  });
+  db.all(
+    `SELECT 
+        id, name, email, role, created_at,
+        CASE WHEN google_id IS NOT NULL AND TRIM(google_id) <> '' THEN 1 ELSE 0 END AS has_google,
+        CASE WHEN password_hash IS NOT NULL AND TRIM(password_hash) <> '' THEN 1 ELSE 0 END AS has_password
+      FROM users
+      ORDER BY created_at DESC, id DESC`,
+    [],
+    (err, users) => {
+      if (err) users = [];
+      res.render('admin_users', { users });
+    }
+  );
 });
 
 app.post('/admin/users/:id/make-admin', ensureAdmin, (req, res) => {
@@ -299,6 +308,45 @@ app.post('/admin/users/:id/make-admin', ensureAdmin, (req, res) => {
   db.run('UPDATE users SET role = ? WHERE id = ?', ['admin', id], (err) => {
     req.session.message = err ? 'Failed to grant admin rights.' : 'Admin rights granted.';
     res.redirect('/admin/users');
+  });
+});
+
+// Admin: remove admin role
+app.post('/admin/users/:id/unadmin', ensureAdmin, (req, res) => {
+  const id = parseInt(req.params.id, 10);
+  if (Number.isNaN(id)) {
+    req.session.message = 'Invalid user id.';
+    return res.redirect('/admin/users');
+  }
+  if (req.user && req.user.id === id) {
+    req.session.message = 'You cannot remove your own admin role.';
+    return res.redirect('/admin/users');
+  }
+  // Ensure we never remove the last remaining admin
+  db.get('SELECT COUNT(*) AS cnt FROM users WHERE role = ?', ['admin'], (err, row) => {
+    if (err) {
+      req.session.message = 'Database error.';
+      return res.redirect('/admin/users');
+    }
+    const adminCount = row ? row.cnt : 0;
+    db.get('SELECT id, email, role FROM users WHERE id = ?', [id], (e2, user) => {
+      if (e2 || !user) {
+        req.session.message = 'User not found.';
+        return res.redirect('/admin/users');
+      }
+      if (user.role !== 'admin') {
+        req.session.message = 'User is not an admin.';
+        return res.redirect('/admin/users');
+      }
+      if (adminCount <= 1) {
+        req.session.message = 'Cannot remove the last admin.';
+        return res.redirect('/admin/users');
+      }
+      db.run('UPDATE users SET role = ? WHERE id = ?', ['user', id], (uErr) => {
+        req.session.message = uErr ? 'Failed to remove admin rights.' : `Admin rights removed from ${user.email || 'user'}.`;
+        return res.redirect('/admin/users');
+      });
+    });
   });
 });
 

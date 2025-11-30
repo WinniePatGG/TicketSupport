@@ -25,7 +25,7 @@
     <div class="table">
       <div class="row head">
         <div>Name</div>
-        <div>Email</div>
+        <div>Email · Auth</div>
         <div>Role</div>
         <div>Created</div>
         <div></div>
@@ -33,7 +33,21 @@
       <% users.forEach(u => { %>
         <div class="row">
           <div><%= (u.name && u.name.trim()) ? u.name : '—' %></div>
-          <div class="small muted"><%= u.email || '—' %></div>
+          <div class="small muted">
+            <%= u.email || '—' %>
+            <% if (typeof u.has_google !== 'undefined' || typeof u.has_password !== 'undefined') { %>
+              ·
+              <% if (u.has_google && u.has_password) { %>
+                <span class="badge">Google + Email</span>
+              <% } else if (u.has_google) { %>
+                <span class="badge">Google</span>
+              <% } else if (u.has_password) { %>
+                <span class="badge">Email</span>
+              <% } else { %>
+                <span class="badge">No login set</span>
+              <% } %>
+            <% } %>
+          </div>
           <div>
             <% if (u.role === 'admin') { %>
               <span class="badge admin">admin</span>
@@ -47,6 +61,14 @@
               <form method="post" action="/admin/users/<%= u.id %>/make-admin" onsubmit="return confirm('Grant admin rights to <%= u.email %>?')">
                 <button type="submit" class="btn">Make admin</button>
               </form>
+            <% } else { %>
+              <% if (!currentUser || currentUser.id !== u.id) { %>
+                <form method="post" action="/admin/users/<%= u.id %>/unadmin" onsubmit="return confirm('Remove admin rights from <%= u.email %>?')">
+                  <button type="submit" class="btn danger">Remove admin</button>
+                </form>
+              <% } else { %>
+                <span class="small muted">(You)</span>
+              <% } %>
             <% } %>
           </div>
         </div>
