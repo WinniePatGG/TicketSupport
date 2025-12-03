@@ -1,5 +1,9 @@
 # WinniePatGG's Ticket Support
 
+![Docker Pulls](https://img.shields.io/docker/pulls/winniepat/ticketsupport)
+![GitHub License](https://img.shields.io/github/license/WinniePatGG/TicketSupport)
+![Docker Stars](https://img.shields.io/docker/stars/winniepat/ticketsupport)
+
 ##  Environment Variables (.env)
 ### Server Variables
 | Key            |                     Value                      |
